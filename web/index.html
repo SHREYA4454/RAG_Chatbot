@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open PDF RAG</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, Segoe UI, sans-serif; color: #172033; background: #f3f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1000px; margin: 0 auto; padding: 28px 18px 60px; }
+    h1 { margin: 0 0 6px; font-size: 1.8rem; }
+    .subtle { color: #667085; }
+    .card { background: white; border: 1px solid #e3e8f0; border-radius: 12px; padding: 18px; margin: 16px 0; box-shadow: 0 2px 8px #15233a0a; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .stat { border-radius: 9px; background: #f5f7fb; padding: 12px; }
+    .stat strong { display: block; font-size: 1.35rem; margin-top: 5px; }
+    button { border: 0; color: white; background: #3056d3; border-radius: 8px; padding: 10px 15px; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    textarea { width: 100%; min-height: 84px; border: 1px solid #ccd4e0; border-radius: 8px; padding: 12px; font: inherit; resize: vertical; }
+    .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    .answer { white-space: pre-wrap; line-height: 1.55; }
+    .source { border-top: 1px solid #edf0f5; padding: 12px 0; }
+    .source:first-child { border-top: 0; }
+    .badge { display: inline-block; font-size: .78rem; padding: 3px 8px; border-radius: 99px; background: #eaf0ff; color: #2947a9; }
+    .warning { background: #fff6df; color: #674b00; border-radius: 8px; padding: 10px; margin-top: 12px; }
+    .error { color: #a32020; }
+    @media (max-width: 650px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Open PDF RAG</h1>
+  <div class="subtle">Local retrieval-augmented QA with open embeddings and traceable PDF citations.</div>
+  <section class="card">
+    <h2>Knowledge base</h2>
+    <div id="status" class="stats"></div>
+    <div id="coverage"></div>
+    <div class="row"><button id="ingest">Index PDFs in ./data</button><span id="ingestMessage" class="subtle"></span></div>
+  </section>
+  <section class="card">
+    <h2>Ask the documents</h2>
+    <textarea id="question" placeholder="Ask a question grounded in the indexed PDFs..."></textarea>
+    <div class="row"><button id="ask">Ask</button><span id="chatMessage" class="subtle"></span></div>
+  </section>
+  <section id="answerCard" class="card" hidden>
+    <div class="row"><h2 style="margin:0">Answer</h2><span id="mode" class="badge"></span><span id="latency" class="subtle"></span></div>
+    <p id="answer" class="answer"></p>
+    <h3>Sources</h3><div id="sources"></div>
+  </section>
+  <section class="card">
+    <h2>Runtime metrics</h2>
+    <div id="metrics" class="subtle">No queries yet.</div>
+  </section>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  async function getJson(url, options) {
+    const response = await fetch(url, options);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    return data;
+  }
+  async function refresh() {
+    try {
+      const [status, metrics] = await Promise.all([getJson("/api/status"), getJson("/api/metrics")]);
+      $("status").innerHTML = [
+        ["PDFs", status.pdf_count], ["Pages", status.total_pages],
+        ["Passages", status.indexed_chunks], ["Target", status.meets_corpus_target ? "Met" : "Not met"]
+      ].map(([label, value]) => `<div class="stat">${label}<strong>${value}</strong></div>`).join("");
+      const active = status.ingestion.running
+        ? `Indexing ${status.ingestion.current_file || ""} (${status.ingestion.processed}/${status.ingestion.total})`
+        : status.ingestion.error ? `Last ingestion error: ${status.ingestion.error}` : "Ready";
+      $("coverage").innerHTML = `<p class="subtle">${active}. Requirement: at least ${status.minimum_pdf_count} PDFs with ${status.minimum_pages_per_pdf}+ pages each (${status.qualifying_pdf_count} currently qualify).</p>`;
+      $("ingest").disabled = status.ingestion.running;
+      $("ingestMessage").textContent = status.ingestion.running ? "Ingestion runs in the background; this page refreshes its progress." : "";
+      $("metrics").textContent = metrics.measured_queries
+        ? `${metrics.queries} queries · p95 ${metrics.latency_p95_ms} ms · mean ${metrics.latency_mean_ms} ms · extractive fallbacks ${metrics.extractive_fallbacks}`
+        : "No queries yet.";
+    } catch (error) { $("coverage").textContent = error.message; }
+  }
+  $("ingest").addEventListener("click", async () => {
+    $("ingestMessage").textContent = "Starting ingestion...";
+    try { await getJson("/api/ingest", {method: "POST"}); }
+    catch (error) { $("ingestMessage").textContent = error.message; }
+    refresh();
+  });
+  $("ask").addEventListener("click", async () => {
+    const question = $("question").value.trim();
+    if (!question) { $("chatMessage").textContent = "Enter a question first."; return; }
+    $("ask").disabled = true;
+    $("chatMessage").textContent = "Searching and generating...";
+    try {
+      const result = await getJson("/api/chat", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({question})
+      });
+      $("answerCard").hidden = false;
+      $("answer").textContent = result.answer;
+      $("mode").textContent = result.mode;
+      $("latency").textContent = `${result.latency_ms} ms`;
+      $("sources").replaceChildren(...result.sources.map((source) => {
+        const article = document.createElement("article");
+        article.className = "source";
+        const title = document.createElement("strong");
+        title.textContent = `${source.filename}, page ${source.page} · score ${source.score}`;
+        const excerpt = document.createElement("p");
+        excerpt.className = "subtle";
+        excerpt.textContent = source.excerpt;
+        article.append(title, excerpt);
+        return article;
+      }));
+      if (result.mode !== "ollama") $("chatMessage").textContent = "Generation fallback used; answer is an excerpt, not a synthesized response.";
+      else $("chatMessage").textContent = "";
+      await refresh();
+    } catch (error) { $("chatMessage").textContent = error.message; }
+    finally { $("ask").disabled = false; }
+  });
+  refresh();
+  setInterval(refresh, 3000);
+</script>
+</body>
+</html>
