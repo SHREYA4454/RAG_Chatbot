@@ -18,7 +18,9 @@ source [PROJECT_GUIDE.md](PROJECT_GUIDE.md). Regenerate the PDF with
 The supplied corpus contains 10 PDFs, 3,900 pages total. Every book exceeds
 the 200-page minimum. PyMuPDF's native-text check found fewer than 40
 non-whitespace characters on 2,270 pages; those pages will use full-page OCR.
-The source files have been copied to `data/` for ingestion. These are input
+For text-bearing pages, 2,978 of 2,983 image placements cover at least 70% of
+the page and are skipped as duplicate OCR; small embedded images may still be
+OCRed. The source files have been copied to `data/` for ingestion. These are input
 files, not an already-built vector index: ingestion has not yet been run, so
 the indexed-passage count and answer latency are not measured. Run the steps
 below to build the local index.

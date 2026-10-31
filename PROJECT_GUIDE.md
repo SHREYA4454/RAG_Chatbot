@@ -57,9 +57,12 @@ committed to Git by default.
 
 A native-text scan found fewer than 40 non-whitespace characters on 2,270
 pages. Those pages take the full-page OCR path. Other pages can still contain
-raster images, which the implementation OCRs separately when they are large
-enough. This figure estimates pages that need OCR based on extracted text; it
-is not an OCR accuracy measurement.
+raster images. A placement check found that 2,978 of 2,983 image placements on
+text-bearing pages cover at least 70% of the page, so the app skips those
+page-sized images as redundant OCR of pages that already have extractable
+text. Smaller embedded images are eligible for separate OCR when they meet the
+30,000-pixel minimum. This estimates OCR workload; it is not an OCR accuracy
+measurement.
 
 ## 3. Processing pipeline
 
@@ -67,8 +70,9 @@ is not an OCR accuracy measurement.
 
 1. The `/api/ingest` endpoint scans `RAG_DATA_DIR` recursively for PDFs.
 2. PyMuPDF extracts text blocks and page counts. Short-text pages are rendered
-   and sent to Tesseract OCR. Large embedded images on text-bearing pages are
-   also OCRed.
+   and sent to Tesseract OCR. Large, non-page-sized embedded images on
+   text-bearing pages are also OCRed; page-sized images are skipped as likely
+   duplicates of the extractable page text.
 3. Repeated lines found in page-edge blocks are removed from native text.
    Language is detected per page with a deterministic language detector.
 4. Text is split independently per page into chunks of 650 whitespace-delimited
@@ -165,7 +169,9 @@ correctness, citation entailment, or OCR accuracy.
 
 ## 6. Tests and measured results
 
-Two unit tests cover deterministic chunk size/overlap and empty-input behavior.
+Four unit tests cover deterministic chunk size/overlap, empty input, and
+avoiding duplicate OCR of full-page images while retaining OCR for smaller
+embedded images.
 Python compilation and both tests passed in the development environment.
 Editor diagnostics reported no errors.
 

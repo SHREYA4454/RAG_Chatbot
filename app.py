@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
 
 from chunking import chunks
+from pdf_processing import should_ocr_embedded_image
 
 DetectorFactory.seed = 0
 
@@ -139,9 +140,9 @@ def _page_text(page: fitz.Page) -> tuple[str, set[str]]:
             if xref in seen_images:
                 continue
             seen_images.add(xref)
-            image_data = page.parent.extract_image(xref)
-            if image_data["width"] * image_data["height"] < 30000:
+            if not should_ocr_embedded_image(page, xref):
                 continue
+            image_data = page.parent.extract_image(xref)
             from PIL import Image
 
             image = Image.open(io.BytesIO(image_data["image"])).convert("RGB")

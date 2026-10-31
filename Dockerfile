@@ -11,7 +11,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-COPY app.py chunking.py ./
+COPY app.py chunking.py pdf_processing.py ./
 COPY web ./web
 RUN mkdir -p /app/data /app/vector_db
 
