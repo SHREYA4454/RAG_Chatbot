@@ -50,23 +50,25 @@ the local LLM, and your PDF index.
 
 Docker Desktop / the Docker Engine must be running. The supplied PDFs are
 already staged in `data/`; for a different corpus, place PDFs there (subfolders
-are scanned recursively). Start the stack:
+are scanned recursively).
+
+1. Start the stack:
 
    ```powershell
    docker compose up --build -d
    ```
 
-3. Pull the default local model (first run downloads it):
+2. Download the default local answer model (first run only):
 
    ```powershell
    docker compose exec ollama ollama pull qwen2.5:3b
    ```
 
-4. Open <http://localhost:8000>, choose **Index PDFs in ./data**, and wait for
+3. Open <http://localhost:8000>, choose **Index PDFs in ./data**, and wait for
    ingestion to finish. This corpus includes many scanned pages; OCR and
    embedding may take substantial time. The first embedding-model load also
    downloads `sentence-transformers/all-MiniLM-L6-v2`.
-5. Ask a question. The answer includes source excerpts with filename, page,
+4. Ask a question. The answer includes source excerpts with filename, page,
    similarity score, and response mode.
 
 The vector index and manifest persist in `vector_db/`; downloaded Ollama models

@@ -10,7 +10,8 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.15.0+cpu \
+    && pip install -r requirements.txt
 COPY app.py chunking.py pdf_processing.py ./
 COPY web ./web
 RUN mkdir -p /app/data /app/vector_db

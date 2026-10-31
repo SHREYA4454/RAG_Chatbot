@@ -123,6 +123,8 @@ and generated index persist locally. Ollama models persist in a Docker volume.
 
 The Docker image installs English Tesseract language data. For other languages,
 install the required Tesseract language packs and configure `OCR_LANG`.
+The container pins the CPU-only PyTorch wheel, avoiding a large CUDA runtime
+download on machines running inference on CPU.
 
 ### Local Python setup
 
